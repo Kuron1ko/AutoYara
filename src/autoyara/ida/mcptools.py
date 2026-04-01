@@ -1,0 +1,24 @@
+# 标准库
+import asyncio  # noqa: I001
+
+# 第三方库
+from mcp import stdio_client
+
+# 内部模块
+from autoyara.configs.config import get_server_cmd
+
+
+def get_hex_from_ida(elf_file_path, function_name):
+    server_cmd = get_server_cmd()
+
+    async def _call():
+        async with stdio_client(command=server_cmd) as session:
+            return await session.call_tool(
+                "get_hex_from_ida",
+                {
+                    "elf_file_path": elf_file_path,
+                    "function_name": function_name,
+                },
+            )
+
+    return asyncio.run(_call())
