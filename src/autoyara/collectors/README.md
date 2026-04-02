@@ -184,18 +184,40 @@ func_text = extract_function(source_text, func_hint, target_lineno)
 
 对应修复函数字段为 `fixed_function`。
 
-## 常见环境变量
+## Token 配置（推荐）
 
-- `GITCODE_PRIVATE_TOKEN` 或 `GITCODE_TOKEN`
-  - 可选；用于访问受限仓库或提升 GitCode API 稳定性（公开仓库可匿名）
+当出现以下情况时，建议配置访问令牌后重试：
+
+- `rate limited`（GitHub API 限流）
+- 无法从 PR 定位修复提交
+- 拉取 commit diff/source 失败（尤其是 GitCode 链接）
+
+支持的环境变量：
+
 - `GITHUB_TOKEN` 或 `GITHUB_API_TOKEN`
-  - 用于提升 GitHub API 限流稳定性
+  - 用于提高 GitHub API 限流阈值，减少 403/rate limit
+- `GITCODE_PRIVATE_TOKEN` 或 `GITCODE_TOKEN`
+  - 用于 GitCode API 鉴权，提高公开仓库稳定性并支持受限仓库
 
-PowerShell 示例：
+PowerShell（当前会话）：
 
 ```powershell
-$env:GITCODE_PRIVATE_TOKEN="your_token"
-$env:GITHUB_TOKEN="your_token"
+$env:GITHUB_TOKEN="your_github_token"
+$env:GITCODE_PRIVATE_TOKEN="your_gitcode_token"
+```
+
+PowerShell（长期生效，重开终端后可用）：
+
+```powershell
+setx GITHUB_TOKEN "your_github_token"
+setx GITCODE_PRIVATE_TOKEN "your_gitcode_token"
+```
+
+可用下面命令确认变量是否已设置：
+
+```powershell
+echo $env:GITHUB_TOKEN
+echo $env:GITCODE_PRIVATE_TOKEN
 ```
 
 ## 兼容性与入口说明
