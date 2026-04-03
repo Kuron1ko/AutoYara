@@ -6,11 +6,12 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 H = {"User-Agent": "Mozilla/5.0"}
 SESSION = requests.Session()
 SESSION.headers.update(H)
+HTTP_TIMEOUT_SEC = 20
 
 
 def get(url, allow_html=False):
     try:
-        r = SESSION.get(url, timeout=20, verify=False)
+        r = SESSION.get(url, timeout=HTTP_TIMEOUT_SEC, verify=False)
         r.raise_for_status()
         t = r.content.decode("utf-8", errors="replace")
         if not allow_html and ("<html" in t[:300] or t.lstrip().startswith("<!")):

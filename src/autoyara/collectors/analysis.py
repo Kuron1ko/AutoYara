@@ -1,6 +1,7 @@
 import json
 import os
 import re
+from typing import Any
 
 from .discovery import UPSTREAM
 from .gitcode import (
@@ -10,6 +11,7 @@ from .gitcode import (
     gitcode_private_token,
 )
 from .http_client import SESSION, H, get
+from .internal_types import CrawlerLink
 
 _src_cache = {}
 _parent_cache = {}
@@ -127,14 +129,27 @@ def get_upstream_commit_from_patch(diff_text):
 
 
 def get_parent_sha_upstream(upstream_sha):
-    """从 torvalds/linux 获取上游 commit 的 parent SHA"""
+    """从 torvalds/linux 获取上游 commit 的 parent SHA。
+
+    无 GITHUB_TOKEN 时 API 限流严重（匿名 60 次/小时），限流直接跳过而不重试。
+    """
     if not upstream_sha:
         return None, None
-    t = get(f"https://api.github.com/repos/torvalds/linux/commits/{upstream_sha}")
-    if t and "{" in t:
-        try:
-            data = json.loads(t)
-            if "API rate limit" in data.get("message", ""):
+    try:
+        r = SESSION.get(
+            f"https://api.github.com/repos/torvalds/linux/commits/{upstream_sha}",
+            headers=_github_api_headers(),
+            timeout=20,
+            verify=False,
+        )
+        if r.status_code in (403, 429):
+            print("  [upstream] GitHub API rate limited, skipping parent lookup")
+            return None, None
+        r.raise_for_status()
+        data = r.json()
+        if isinstance(data, dict):
+            msg = data.get("message", "")
+            if "rate limit" in msg.lower():
                 print("  [upstream] GitHub rate limited")
                 return None, None
             parents = data.get("parents", [])
@@ -142,8 +157,8 @@ def get_parent_sha_upstream(upstream_sha):
                 p = parents[0]["sha"]
                 print("  [upstream parent] " + p[:12])
                 return p, "torvalds/linux"
-        except Exception:
-            pass
+    except Exception:
+        pass
     return None, None
 
 
@@ -214,65 +229,96 @@ def parse_vuln_desc_from_patch_text(diff_text):
                 lines.append(x)
         if lines:
             desc = "\n".join(lines[:12]).strip()
+    # GitCode 等返回的 unified diff 可能没有 From:/Subject:，仅在 diff --git 前有说明与 CVE 行
+    if (not title or not desc) and "diff --git" in diff_text:
+        head = diff_text.split("diff --git", 1)[0].strip()
+        if len(head) > 15:
+            if not cve:
+                cm2 = re.search(r"\b(CVE-\d{4}-\d+)\b", head, re.I)
+                if cm2:
+                    cve = cm2.group(0).upper()
+            hlines = []
+            for ln in head.splitlines():
+                x = _clean_desc_line(ln)
+                if x:
+                    hlines.append(x)
+            if hlines:
+                if not title:
+                    title = hlines[0][:240]
+                if not desc:
+                    rest = hlines[1:] if title == hlines[0] else hlines
+                    desc = "\n".join(rest).strip()[:8000]
     return {"title": title, "description": desc, "cve": cve}
 
 
+def _commit_message_from_api_json(data: dict) -> str:
+    """解析 GitHub/Gitee/GitCode 等返回的 commit JSON，取出完整提交说明。"""
+    if not isinstance(data, dict):
+        return ""
+    c = data.get("commit")
+    if isinstance(c, dict):
+        msg = c.get("message")
+        if isinstance(msg, str) and msg.strip():
+            return msg.strip()
+        title = c.get("title")
+        body = c.get("body")
+        parts = []
+        if isinstance(title, str) and title.strip():
+            parts.append(title.strip())
+        if isinstance(body, str) and body.strip():
+            parts.append(body.strip())
+        if parts:
+            return "\n".join(parts)
+    for k in ("message", "title"):
+        v = data.get(k)
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+    return ""
+
+
 def fetch_commit_meta_from_api(owner, repo, sha):
-    """尝试从 GitHub/Gitee/GitCode API 获取 commit message。"""
-    msg = ""
-    if owner and repo and sha:
-        for try_owner in [owner, "openharmony"]:
-            try:
-                r = SESSION.get(
-                    f"https://api.github.com/repos/{try_owner}/{repo}/commits/{sha}",
-                    headers=_github_api_headers(),
-                    timeout=25,
-                    verify=False,
-                )
-                r.raise_for_status()
-                data = r.json()
-                if isinstance(data, dict):
-                    msg = ((data.get("commit") or {}).get("message") or "").strip()
-                    if msg:
-                        return msg
-            except Exception:
-                pass
+    """尝试从 GitHub/Gitee/GitCode API 获取 commit message（GitCode 公开仓可无 token）。"""
+    if not (owner and repo and sha):
+        return ""
+    for try_owner in [owner, "openharmony"]:
         try:
-            t = get(f"https://gitee.com/api/v5/repos/{owner}/{repo}/commits/{sha}")
-            if t:
-                data = json.loads(t)
-                msg = (
-                    data.get("commit", {}).get("message")
-                    or data.get("message")
-                    or data.get("title")
-                    or ""
-                ).strip()
+            r = SESSION.get(
+                f"https://api.github.com/repos/{try_owner}/{repo}/commits/{sha}",
+                headers=_github_api_headers(),
+                timeout=25,
+                verify=False,
+            )
+            r.raise_for_status()
+            data = r.json()
+            if isinstance(data, dict):
+                msg = _commit_message_from_api_json(data)
                 if msg:
                     return msg
         except Exception:
             pass
-        if gitcode_private_token():
-            try:
-                url = f"https://gitcode.com/api/v5/repos/{owner}/{repo}/commits/{sha}"
-                r = SESSION.get(
-                    url, headers=gitcode_auth_headers(), timeout=25, verify=False
-                )
-                r.raise_for_status()
-                data = r.json()
-                msg = (
-                    data.get("commit", {}).get("message")
-                    or data.get("message")
-                    or data.get("title")
-                    or ""
-                ).strip()
-                if msg:
-                    return msg
-            except Exception:
-                pass
+    try:
+        t = get(f"https://gitee.com/api/v5/repos/{owner}/{repo}/commits/{sha}")
+        if t:
+            data = json.loads(t)
+            msg = _commit_message_from_api_json(data)
+            if msg:
+                return msg
+    except Exception:
+        pass
+    try:
+        url = f"https://gitcode.com/api/v5/repos/{owner}/{repo}/commits/{sha}"
+        r = SESSION.get(url, headers=gitcode_auth_headers(), timeout=25, verify=False)
+        r.raise_for_status()
+        data = r.json()
+        msg = _commit_message_from_api_json(data)
+        if msg:
+            return msg
+    except Exception:
+        pass
     return ""
 
 
-def fetch_vuln_description(item, diff_text):
+def fetch_vuln_description(item: CrawlerLink, diff_text):
     """
     聚合漏洞描述来源（优先级）：
     1) patch 头 Subject/正文
@@ -284,23 +330,56 @@ def fetch_vuln_description(item, diff_text):
     desc = info.get("description", "")
     cve = info.get("cve", "")
     url = item.get("url", "")
+    # 支持 commit / patch(blob) / github / gitcode / gitee 等各种 URL 格式
+    owner: str = "openharmony"
+    repo: str = item.get("repo", "")
+    sha: str | None = item.get("fix_sha")
+    # gitee/gitcode commit URL
     m = re.match(
-        r"https?://(?:gitee|gitcode)\.com/([^/]+)/([^/]+)/commit/([0-9a-f]+)", url, re.I
+        r"https?://(?:gitee|gitcode|github)\.com/([^/]+)/([^/]+)/commit/([0-9a-f]+)",
+        url,
+        re.I,
     )
-    owner = m.group(1) if m else "openharmony"
-    repo = m.group(2) if m else item.get("repo", "")
-    sha = m.group(3) if m else item.get("fix_sha")
-    if not (title and desc):
+    if m:
+        owner, repo, sha = m.group(1), m.group(2), m.group(3)
+    else:
+        # gitcode/gitee blob patch URL: .../blob/<sha>/filename.patch
+        m2 = re.match(
+            r"https?://(?:gitee|gitcode)\.com/([^/]+)/([^/]+)/blob/([0-9a-f]+)/",
+            url,
+            re.I,
+        )
+        if m2:
+            owner, repo, sha = m2.group(1), m2.group(2), m2.group(3)
+        elif not sha:
+            # 从 diff_text 里尝试提取 SHA（patch 文件头通常含 From <sha>）
+            sha_m = re.search(r"^From ([0-9a-f]{40})\b", diff_text or "", re.M)
+            if sha_m:
+                sha = sha_m.group(1)
+    if not title or not desc or not cve:
         msg = fetch_commit_meta_from_api(owner, repo, sha)
         if msg:
+            if not cve:
+                cm = re.search(r"\b(CVE-\d{4}-\d+)\b", msg, re.I)
+                if cm:
+                    cve = cm.group(0).upper()
             lines = [x.strip() for x in msg.splitlines()]
             lines = [x for x in lines if _clean_desc_line(x)]
             if lines:
+                first = lines[0]
                 if not title:
-                    title = lines[0]
+                    title = first
                 if not desc:
-                    desc = "\n".join(lines[1:12]).strip()
-    if not (title and desc) and url:
+                    if title == first:
+                        desc = "\n".join(lines[1:]).strip()[:8000]
+                    else:
+                        desc = "\n".join(lines).strip()[:8000]
+            if not desc and msg.strip():
+                tail = msg.strip()
+                if title and tail.startswith(title):
+                    tail = tail[len(title) :].lstrip("\n\r- ")
+                desc = tail[:8000].strip()
+    if (not title or not desc) and url:
         page = get(url, allow_html=True)
         txt = strip_html_to_text(page or "")
         if txt:
@@ -310,18 +389,25 @@ def fetch_vuln_description(item, diff_text):
                     cve = c.group(1).upper()
             if not title:
                 tm = re.search(
-                    r"(?:commit|修复|fix)\s*[:：]?\s*([^.]{20,200})", txt, re.I
+                    r"(?:commit|提交|修复|fix)\s*[:：]?\s*([^\n.]{10,240})",
+                    txt,
+                    re.I,
                 )
                 if tm:
                     title = tm.group(1).strip()
             if not desc:
                 dm = re.search(
-                    r"(?:Upstream commit.*?)(object_err\(\).*?not crash in the process\.)",
+                    r"CVE\s*[:：]\s*CVE-\d{4}-\d+\s*(.+?)(?=Signed-off-by|---\s*$)",
                     txt,
-                    re.I,
+                    re.I | re.S,
                 )
                 if dm:
-                    desc = dm.group(1).strip()
+                    desc = re.sub(r"\s+", " ", dm.group(1).strip())[:2000]
+                if not desc and len(txt) > 80:
+                    cut = txt[:1500]
+                    if "Signed-off-by" in cut:
+                        cut = cut.split("Signed-off-by")[0]
+                    desc = re.sub(r"\s+", " ", cut.strip())[:2000]
     return {"title": title, "description": desc, "cve": cve}
 
 
@@ -353,7 +439,9 @@ def extend_signature_start(lines, sig_idx):
     return sig_idx
 
 
-def extract_function(source, func_hint, target_lineno):
+def extract_function(
+    source: str | None, func_hint: str, target_lineno: int
+) -> str | None:
     if not source:
         return None
     lines = source.splitlines()
@@ -444,10 +532,39 @@ def _lines_equal_seq(chunk, new_seq):
     return True
 
 
-def reconstruct_old_from_new(new_src, hunks):
+def _find_seq_in_lines(lines: list[str], seq: list[str], near: int) -> int | None:
+    """在 lines 中以 near 为中心，搜索与 seq 完全匹配的起始行索引（允许 ±50 行偏移）。"""
+    if not seq:
+        return None
+    radius = 50
+    lo = max(0, near - radius)
+    hi = min(len(lines) - len(seq), near + radius)
+    best_idx: int | None = None
+    best_dist = radius + 1
+    for i in range(lo, hi + 1):
+        chunk = lines[i : i + len(seq)]
+        if _lines_equal_seq(chunk, seq) or _lines_equal_seq(
+            [x.rstrip() for x in chunk], [x.rstrip() for x in seq]
+        ):
+            d = abs(i - near)
+            if d < best_dist:
+                best_dist = d
+                best_idx = i
+    return best_idx
+
+
+def reconstruct_old_from_new(
+    new_src: str | None, hunks: list[dict[str, Any]]
+) -> str | None:
+    """将 new_src + diff hunks 反向推算出旧版本全文。
+
+    - 行号越界或不一致时先尝试在 ±50 行内模糊定位；若仍失败则跳过该 hunk。
+    - 所有 hunk 都跳过时返回 None（调用方可降级为 derive_vulnerable）。
+    """
     if not new_src or not hunks:
         return None
     lines = list(new_src.splitlines())
+    skipped = 0
     for h in sorted(hunks, key=lambda x: x.get("new_start", 0), reverse=True):
         body = h.get("body")
         if not body:
@@ -457,44 +574,130 @@ def reconstruct_old_from_new(new_src, hunks):
             continue
         start = h["new_start"] - 1
         end = start + len(new_seq)
+        # 越界时尝试模糊定位
         if start < 0 or end > len(lines):
-            print(
-                f"  [reconstruct] 行号越界 new_start={h.get('new_start')} "
-                f"need [{start},{end}) len={len(lines)}"
-            )
-            return None
+            found = _find_seq_in_lines(lines, new_seq, start) if new_seq else None
+            if found is not None:
+                start, end = found, found + len(new_seq)
+            else:
+                skipped += 1
+                continue
+        # 内容不一致时同样尝试模糊定位
         chunk = lines[start:end]
-        if not _lines_equal_seq(chunk, new_seq):
-            if not _lines_equal_seq(
-                [x.rstrip() for x in chunk], [x.rstrip() for x in new_seq]
-            ):
-                print(
-                    "  [reconstruct] 与 diff 中新侧行不一致 new_start={}".format(
-                        h.get("new_start")
-                    )
-                )
-                return None
+        if not _lines_equal_seq(chunk, new_seq) and not _lines_equal_seq(
+            [x.rstrip() for x in chunk], [x.rstrip() for x in new_seq]
+        ):
+            found = _find_seq_in_lines(lines, new_seq, start) if new_seq else None
+            if found is not None:
+                start, end = found, found + len(new_seq)
+            else:
+                skipped += 1
+                continue
         lines[start:end] = old_seq
+    if skipped == len(hunks):
+        return None
     return "\n".join(lines)
 
 
-def derive_vulnerable(fixed_func, all_hunks):
+def derive_vulnerable(
+    fixed_func: str | None, all_hunks: list[dict[str, Any]]
+) -> str | None:
+    """从修复后函数反推漏洞函数：将 added 行替换回 removed 行。
+
+    若没有发生任何实质替换（结果与输入完全相同），返回 None 而非相同内容，
+    避免 vulnerable_code == fixed_code 的无效爬取。
+    """
     if not fixed_func:
         return None
     result = fixed_func
+    changed = False
     for hunk in all_hunks:
         added, removed = hunk["added"], hunk["removed"]
         for i, add_item in enumerate(added):
             code = add_item["code"]
             if code in result:
                 if i < len(removed):
-                    result = result.replace(code, removed[i]["code"], 1)
+                    new_result = result.replace(code, removed[i]["code"], 1)
                 else:
-                    result = re.sub(re.escape(code) + r"\n?", "", result, count=1)
+                    new_result = re.sub(re.escape(code) + r"\n?", "", result, count=1)
+                if new_result != result:
+                    changed = True
+                result = new_result
+    if not changed:
+        return None
     return result
 
 
-def patch_snippet(hunk_list, mode):
+def build_versions_from_diff(
+    hunk_list: list[dict[str, Any]],
+    full_src: str | None = None,
+    mode_src: str = "new",
+) -> tuple[str, str]:
+    """从 diff hunk 直接构造修复前/后两个版本的代码片段。
+
+    逻辑：
+    - 修复前（vulnerable）：context 行 + `-` 行，去掉 `+` 行
+    - 修复后（fixed）：context 行 + `+` 行，去掉 `-` 行
+
+    当提供了 full_src（完整函数体）时，将 diff 窗口内的变更区域精确替换到函数体中，
+    得到完整的两个函数版本。否则仅返回 diff 上下文窗口（带行号注释）。
+
+    Returns:
+        (vulnerable_code, fixed_code) — 两者保证不同（若 diff 无变更则均为空串）。
+    """
+    vuln_lines: list[str] = []
+    fixed_lines: list[str] = []
+
+    for h in hunk_list:
+        body = h.get("body", "")
+        for raw in body.splitlines():
+            if not raw:
+                continue
+            kind = raw[0] if raw else " "
+            code = raw[1:] if kind in ("+", "-", " ") else raw
+            if kind == " ":
+                vuln_lines.append(code)
+                fixed_lines.append(code)
+            elif kind == "-":
+                vuln_lines.append(code)
+                # 不加入 fixed
+            elif kind == "+":
+                # 不加入 vuln
+                fixed_lines.append(code)
+
+    vuln_window = "\n".join(vuln_lines)
+    fixed_window = "\n".join(fixed_lines)
+
+    if not full_src:
+        # 无完整源文件：直接返回 diff 窗口，附行号注释
+        vuln_snippet = patch_snippet(hunk_list, "old")
+        fixed_snippet = patch_snippet(hunk_list, "new")
+        return vuln_snippet, fixed_snippet
+
+    # 有完整源文件：将 diff 窗口替换进函数体
+    # 以 mode_src 对应侧的窗口内容在 full_src 中定位并替换
+    src_window = fixed_window if mode_src == "new" else vuln_window
+    other_window = vuln_window if mode_src == "new" else fixed_window
+
+    if src_window and src_window in full_src:
+        if mode_src == "new":
+            # full_src 是修复后：替换出修复前
+            vuln_full = full_src.replace(src_window, other_window, 1)
+            fixed_full = full_src
+        else:
+            # full_src 是修复前：替换出修复后
+            vuln_full = full_src
+            fixed_full = full_src.replace(src_window, other_window, 1)
+        if vuln_full.strip() != fixed_full.strip():
+            return vuln_full, fixed_full
+
+    # 定位失败（行内空白等原因）：退回 diff 窗口
+    vuln_snippet = patch_snippet(hunk_list, "old")
+    fixed_snippet = patch_snippet(hunk_list, "new")
+    return vuln_snippet, fixed_snippet
+
+
+def patch_snippet(hunk_list: list[dict[str, Any]], mode: str) -> str:
     lines = ["/* patch context - source file unavailable */"]
     for h in hunk_list:
         start = h["old_start"] if mode == "old" else h["new_start"]

@@ -76,20 +76,19 @@ git commit -m "WIP: work in progress" --no-verify
 
 ### Scope 范围
 
-- `ida` - IDA 模块
-- `analysis` - 分析模块
-- `validation` - 验证模块
-- `generation` - 生成模块
-- `models` - 数据模型
-- `react` - ReAct 模块
+- `collector` - 对外采集 API（`autoyara.collector`）
+- `collectors` - 采集内部实现（pipeline、analysis、diff_utils 等）
+- `models` - 数据模型（`CollectorConfig`、`CVEItem`）
+- `scripts` - 示例脚本
+- `docs` - 文档
 
 ### 示例
 
 ```bash
-feat(analysis): add function diff analysis
-fix(validation): fix false positive
-docs: update coding standards
-refactor(ida): simplify interface
+feat(collectors): add fuzzy hunk matching in reconstruct
+fix(collector): support github commit URL in commit_url
+docs: update collectors README with token usage
+refactor(models): simplify CVEItem fields
 ```
 
 ---

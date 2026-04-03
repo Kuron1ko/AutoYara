@@ -47,6 +47,11 @@ logs/
 tmp/
 *.tmp
 
+# 爬虫/脚本生成的产物（保留 output/ 目录用 .gitkeep）
+output/*.json
+result.json
+report.txt
+
 # OS
 .DS_Store
 Thumbs.db

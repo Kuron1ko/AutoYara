@@ -1,244 +1,118 @@
-# OpenHarmony CVE Crawler
+# OpenHarmony CVE 采集模块
 
-本项目用于抓取 OpenHarmony 安全公告中的 CVE 链接，拉取修复补丁，提取漏洞函数（修复前）与修复函数（修复后），并输出为终端文本、JSON 或 TXT 报告。
+从 OpenHarmony 安全公告或单条 commit 链接拉取补丁，解析并提取修复前/后函数代码，结果为 **`CVEItem`**（定义在 `autoyara.models`）。流水线内部使用 **`CrawlerLink`**（`collectors/internal_types.py`），不放入 `models`。
 
-当前主流程已采用统一数据模型：`process_item(item)` 返回 `list[AutoYaraDataModel]`。
+**不提供** `python -m …` 或包内 CLI；本地试跑请使用仓库根目录 **`scripts/`** 下的示例脚本，业务代码请 **`import autoyara.collector`**。
 
-## 项目结构与文件职责
+---
 
-当前代码以 `oh_crawler` 包组织，核心文件如下：
+## 下游模块推荐用法
 
-- `crawler.py`
-  - 根目录启动入口（兼容旧方式）
-  - 执行 `python crawler.py ...` 时会转到 `oh_crawler.cli.main()`
-
-- `oh_crawler/__main__.py`
-  - 包入口
-  - 支持 `python -m oh_crawler ...`
-
-- `oh_crawler/__init__.py`
-  - 对外 API 门面
-  - 统一导出常用函数（见 `__all__`），下游可直接 `from oh_crawler import ...`
-
-- `oh_crawler/http_client.py`
-  - 通用 HTTP 能力
-  - 提供全局 `SESSION`、请求头 `H`、`get()` 方法
-
-- `oh_crawler/gitcode.py`
-  - GitCode API 适配层
-  - 包含 token 读取、鉴权头、diff 归一化、PR/commit/blob/parent 相关接口
-
-- `oh_crawler/discovery.py`
-  - 公告与链接发现层
-  - `fetch_bulletin(year, month)` 拉公告
-  - `parse_all_links(md)` 解析 CVE 与链接条目
-  - `classify_url(url)` 判断 commit/pr/patch 类型
-  - `UPSTREAM` 第三方仓库映射
-
-- `oh_crawler/diff_utils.py`
-  - 补丁获取与解析层
-  - `fetch_diff_text(item)` 根据链接条目拿 unified diff
-  - `parse_diff_full(diff)` 将 diff 解析为结构化 hunk 数据
-  - `pick_best_pr_commit_diff(...)` PR 多提交时选择主修复提交
-
-- `oh_crawler/analysis.py`
-  - 分析与提取层（源码、漏洞描述、函数重建）
-  - 源码相关：`fetch_source()`、`get_parent_sha()`、`fetch_source_upstream()`
-  - 漏洞描述：`fetch_vuln_description()`、`parse_vuln_desc_from_patch_text()`
-  - 函数提取：`extract_function()`、`reconstruct_old_from_new()`、`derive_vulnerable()`
-
-- `oh_crawler/pipeline.py`
-  - 主流程编排层
-  - `process_item(item)`：对单个链接条目执行完整处理并返回统一模型列表
-
-- `oh_crawler/cli.py`
-  - 命令行层
-  - `main(argv=None)` 负责参数解析、执行流程、输出文件
-  - `print_result(r)` 负责格式化打印结果
-
-## 快速开始
-
-## 环境要求
-
-- Python 3.9+（建议）
-- 依赖：`requests`、`urllib3`
-
-安装依赖示例：
-
-```bash
-pip install requests urllib3
-```
-
-## 方式一：命令行运行（推荐）
-
-### 1) 按年月抓公告并处理
-
-```bash
-python crawler.py --year 2026 --month 3 --json result.json --txt report.txt
-```
-
-或：
-
-```bash
-python -m oh_crawler --year 2026 --month 3 --max 20
-```
-
-### 2) 单条 commit 模式
-
-```bash
-python crawler.py --commit-url "https://gitcode.com/<owner>/<repo>/commit/<sha>" --cve CVE-XXXX-YYYY --json one.json
-```
-
-如果已有本地补丁可加速/兜底：
-
-```bash
-python crawler.py --commit-url "https://gitcode.com/<owner>/<repo>/commit/<sha>" --patch local.diff --json one.json
-```
-
-## 方式二：作为 Python 库调用
-
-### 1) 推荐：从 `autoyara` 顶层导入（统一入口）
+### 一键采集（最简）
 
 ```python
-from autoyara import fetch_bulletin, parse_all_links, process_item
+from autoyara.collector import CollectorConfig, collect_cve_items
 
-md = fetch_bulletin(2026, 3)
-items = parse_all_links(md)
-models = process_item(items[0])  # list[AutoYaraDataModel]
-first = models[0]
-print(first.vulnerability.cve, first.function_location.file_path)
+cfg = CollectorConfig(
+    year=2026,
+    month=3,
+    end_year=None,        # 与 end_month 同时设置则拉多月公告（闭区间）
+    end_month=None,
+    max_links=20,
+    github_token="",      # 非空则写入 GITHUB_TOKEN 环境变量
+    gitcode_token="",     # 非空则写入 GITCODE_PRIVATE_TOKEN 环境变量
+    http_timeout_sec=25,
+)
+items = collect_cve_items(cfg, delay_between_links_sec=1.0)
+for it in items:
+    print(it.cve_id, it.file_path, len(it.vulnerable_code))
 ```
 
-### 2) 兼容旧结构：转换为历史 dict
+### 单条 commit
 
 ```python
-from autoyara import process_item, to_legacy_result_dict
+from autoyara.collector import CollectorConfig, collect_cve_items
 
-models = process_item(item)
-legacy_rows = [to_legacy_result_dict(m) for m in models]
-print(legacy_rows[0]["cve"], legacy_rows[0]["file"])
+# commit_url 支持 gitee / gitcode / github commit 地址
+cfg = CollectorConfig(
+    commit_url="https://github.com/openharmony/kernel_linux_5.10/commit/<sha>",
+    cve_override="CVE-2024-0000",
+    local_patch_path=None,  # 或指向本地 .patch 文件以跳过在线拉 diff
+)
+items = collect_cve_items(cfg, delay_between_links_sec=0.0)
 ```
 
-### 3) 分层调用（高级用法）
+### 自行编排（细粒度）
 
 ```python
-from oh_crawler import fetch_diff_text, parse_diff_full
+from autoyara.collector import (
+    CollectorConfig,
+    apply_collector_config,
+    fetch_bulletin,
+    parse_all_links,
+    process_item,
+)
 
-diff, repo, sha = fetch_diff_text(item)
-hunks = parse_diff_full(diff)
+cfg = CollectorConfig(year=2026, month=3, max_links=10)
+apply_collector_config(cfg)          # 将 token/timeout 写入运行时环境
+md = fetch_bulletin(2026, 3)         # 拉取安全公告 Markdown
+for link in parse_all_links(md):     # 解析所有 CVE 链接
+    for item in process_item(link):  # 每条链接 → list[CVEItem]
+        print(item.cve_id, item.function_name)
 ```
 
-```python
-from oh_crawler import extract_function
+序列化：`dataclasses.asdict(item)` 得到可直接 `json.dumps` 的字典（字段名：`cve_id`、`vulnerable_code`、`fixed_code`、`description` 等）。
 
-func_text = extract_function(source_text, func_hint, target_lineno)
+---
+
+## 目录与职责
+
+| 位置 | 说明 |
+|------|------|
+| `autoyara.collector` | 对外导出 API |
+| `collectors/orchestrate.py` | `links_from_config`、`collect_cve_items` |
+| `collectors/runtime_config.py` | `apply_collector_config` |
+| `collectors/pipeline/` | `process_item` 流水线 |
+| `collectors/discovery.py` | 公告与链接解析 |
+| `collectors/diff_utils.py` | 取 diff、解析 hunk |
+| `collectors/analysis.py` | 源码与函数提取 |
+| `collectors/gitcode.py` | GitCode API |
+| `collectors/http_client.py` | HTTP 会话与 `get` |
+
+---
+
+## 本地示例脚本
+
+| 脚本 | 作用 |
+|------|------|
+| `scripts/run_bulletin_month.py` | 按年月采集，写入 `output/bulletin_sample.json` |
+| `scripts/run_single_commit.py` | 单 commit 模板（需改 `COMMIT_URL`） |
+
+安装与运行（在仓库根目录）：
+
+```bash
+pip install -e .          # 自动安装 requests、urllib3 等依赖
+python scripts/run_bulletin_month.py
 ```
 
-## 对外导出 API（`oh_crawler.__all__`）
+---
 
-常用函数包括：
+## 环境变量（可选）
 
-- 主流程：`process_item`
-- 公告/链接：`fetch_bulletin`、`parse_all_links`、`classify_url`
-- diff：`fetch_diff_text`、`parse_diff_full`
-- 源码/父提交：`fetch_source`、`get_parent_sha`、`get_upstream_commit_from_patch`
-- 漏洞描述：`fetch_vuln_description`、`parse_vuln_desc_from_patch_text`
-- 函数提取：`extract_function`
-- 命令行：`main`、`print_result`
+- `GITHUB_TOKEN` / `GITHUB_API_TOKEN`
+- `GITCODE_PRIVATE_TOKEN` / `GITCODE_TOKEN`
 
-此外，项目已提供更稳定的公共导出入口：
+也可通过 **`CollectorConfig.github_token` / `gitcode_token`** 在运行时注入（由 `apply_collector_config` 写入环境变量）。
 
-- `autoyara`（推荐）：核心函数 + 公共数据模型
-- `autoyara.collectors`：采集侧核心函数
-- `autoyara.models`：统一数据模型、接口与兼容转换函数
+**说明（GitCode commit 链接）**：漏洞标题/正文优先从 **GitHub** 上的 `.patch` 邮件头解析；并会用 **GitHub commit API** 补全说明。若你所在网络访问 GitHub 不稳定，请配置代理或 `GITHUB_TOKEN`。仅走 GitCode 时，**commit 页面多为前端渲染**，匿名调用 **GitCode REST 可能返回 403**，此时需要 **`GITCODE_PRIVATE_TOKEN`** 才能从 API 取提交说明。
 
-## 结果数据说明
+---
 
-`process_item(item)` 返回 `list[AutoYaraDataModel]`。
+## 对外 API 摘要
 
-你可以按对象属性访问：
-
-- `model.vulnerability.cve`、`model.vulnerability.repository`
-- `model.function_location.file_path`、`model.function_location.function_name`
-- `model.diff_analysis.added_lines`、`model.diff_analysis.removed_lines`
-- `model.function_location.vulnerable_function`
-- `model.function_location.fixed_function`
-
-如需兼容历史调用方，可通过 `to_legacy_result_dict(model)` 转成旧版字典，字段包括：
-
-- `cve`、`repo`、`severity`、`version`
-- `file`、`function_name`、`hunk_headers`
-- `removed_lines`、`added_lines`
-- `vuln_title`、`vuln_description`、`vuln_cve_hint`
-- `vulnerable_function`（漏洞函数，修复前）
-- `fixed_function`（修复函数，修复后）
-
-## 漏洞函数保存在哪里
-
-提取的漏洞文件 `vulnerable_function`。
-
-- 运行中：保存在统一模型 `model.function_location.vulnerable_function`
-- CLI 兼容输出：会自动转为历史字典并保存在 `all_results`
-- 导出 JSON（`--json`）：位于 `items[].vulnerable_function`
-- 导出 TXT（`--txt`）：在文本段落 `[1] VULNERABLE FUNCTION (before fix):` 下
-
-对应修复函数字段为 `fixed_function`。
-
-## Token 配置（推荐）
-
-当出现以下情况时，建议配置访问令牌后重试：
-
-- `rate limited`（GitHub API 限流）
-- 无法从 PR 定位修复提交
-- 拉取 commit diff/source 失败（尤其是 GitCode 链接）
-
-支持的环境变量：
-
-- `GITHUB_TOKEN` 或 `GITHUB_API_TOKEN`
-  - 用于提高 GitHub API 限流阈值，减少 403/rate limit
-- `GITCODE_PRIVATE_TOKEN` 或 `GITCODE_TOKEN`
-  - 用于 GitCode API 鉴权，提高公开仓库稳定性并支持受限仓库
-
-PowerShell（当前会话）：
-
-```powershell
-$env:GITHUB_TOKEN="your_github_token"
-$env:GITCODE_PRIVATE_TOKEN="your_gitcode_token"
-```
-
-PowerShell（长期生效，重开终端后可用）：
-
-```powershell
-setx GITHUB_TOKEN "your_github_token"
-setx GITCODE_PRIVATE_TOKEN "your_gitcode_token"
-```
-
-可用下面命令确认变量是否已设置：
-
-```powershell
-echo $env:GITHUB_TOKEN
-echo $env:GITCODE_PRIVATE_TOKEN
-```
-
-## 兼容性与入口说明
-
-- `python crawler.py ...`：兼容旧入口
-- `python -m oh_crawler ...`：包入口
-- 下游模块建议：`from autoyara import process_item, AutoYaraDataModel, ...`
-- 旧导入方式 `from oh_crawler import ...` 仍可使用（兼容保留）
-
-## 最小下游接入模板
-
-```python
-from autoyara import fetch_bulletin, parse_all_links, process_item
-
-def run_once(year: int, month: int):
-    md = fetch_bulletin(year, month)
-    if not md:
-        return []
-    items = parse_all_links(md)
-    out = []
-    for it in items:
-        out.extend(process_item(it))
-    return out
-```
+- **编排**：`collect_cve_items`、`links_from_config`、`apply_collector_config`
+- **单链处理**：`process_item(link)`
+- **公告**：`fetch_bulletin`、`parse_all_links`、`classify_url`
+- **Diff**：`fetch_diff_text`、`parse_diff_full`、`pick_best_pr_commit_diff`
+- **分析**：`fetch_source`、`get_parent_sha`、`fetch_vuln_description`、`extract_function` 等
+- **模型**：`CollectorConfig`、`CVEItem`（从 `autoyara.models` 经 `autoyara.collector` 一并导出）
