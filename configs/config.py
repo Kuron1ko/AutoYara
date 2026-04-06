@@ -41,6 +41,10 @@ def get_tmp_dir() -> str:
     return tmp_dir
 
 
+def get_openai_api_key() -> str:
+    return _config.get("OPENAI_API_KEY", "")
+
+
 def get_server_cmd():
     return [
         get_python_path(),
@@ -48,5 +52,11 @@ def get_server_cmd():
     ]
 
 
-__all__ = ["get_tmp_dir", "get_python_path", "get_ida_path", "get_log_dir"]
-__all__.append("get_server_cmd")
+__all__ = [
+    "get_tmp_dir",
+    "get_python_path",
+    "get_ida_path",
+    "get_log_dir",
+    "get_openai_api_key",
+    "get_server_cmd",
+]
