@@ -5,11 +5,11 @@ import asyncio  # noqa: I001
 from mcp import stdio_client
 
 # 内部模块
-from autoyara.configs.config import get_server_cmd
+from configs.config import settings
 
 
 def get_hex_from_ida(elf_file_path, function_name):
-    server_cmd = get_server_cmd()
+    server_cmd = settings.server_cmd
 
     async def _call():
         async with stdio_client(command=server_cmd) as session:

@@ -19,20 +19,15 @@ if src_path not in sys.path:
 from mcp.server.fastmcp import FastMCP  # noqa: I001
 
 # 内部模块
-from autoyara.configs.config import (
-    get_ida_path,
-    get_log_dir,
-    get_python_path,
-    get_tmp_dir,
-)
+from configs.config import settings
 
 
 mcp = FastMCP("IDA_Pro_Analyzer")
 
-LOG_DIR = get_log_dir()
-IDA_PATH = get_ida_path()
-PYTHON_PATH = get_python_path()
-TEMP_DIR = get_tmp_dir()
+LOG_DIR = settings.log_dir
+IDA_PATH = settings.ida_path
+PYTHON_PATH = settings.python_path
+TEMP_DIR = settings.tmp_dir
 
 
 def append_log(log_path: str, msg: str) -> None:

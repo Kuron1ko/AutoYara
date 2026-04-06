@@ -80,6 +80,19 @@ class TestSyncLLMClient:
 
         mock_openai.return_value.close.assert_called_once()
 
+    @patch("autoyara.llm.sync_client._default_openai_credentials")
+    @patch("autoyara.llm.sync_client.OpenAI")
+    def test_use_settings_as_default(self, mock_openai, mock_default_credentials):
+        from autoyara.llm import SyncLLMClient
+
+        mock_default_credentials.return_value = ("settings-key", "https://example.com/v1")
+        SyncLLMClient()
+
+        mock_openai.assert_called_once_with(
+            api_key="settings-key",
+            base_url="https://example.com/v1",
+        )
+
 
 class TestAsyncLLMClient:
     """Tests for AsyncLLMClient."""
@@ -123,6 +136,20 @@ class TestAsyncLLMClient:
             assert isinstance(client, AsyncLLMClient)
 
         mock_openai.return_value.close.assert_awaited_once()
+
+    @patch("autoyara.llm.async_client._default_openai_credentials")
+    @patch("autoyara.llm.async_client.AsyncOpenAI")
+    @pytest.mark.asyncio
+    async def test_use_settings_as_default(self, mock_openai, mock_default_credentials):
+        from autoyara.llm import AsyncLLMClient
+
+        mock_default_credentials.return_value = ("settings-key", "https://example.com/v1")
+        AsyncLLMClient()
+
+        mock_openai.assert_called_once_with(
+            api_key="settings-key",
+            base_url="https://example.com/v1",
+        )
 
 
 class TestCreateFunctions:
