@@ -45,6 +45,10 @@ def get_openai_api_key() -> str:
     return _config.get("OPENAI_API_KEY", "")
 
 
+def get_openai_base_url() -> str:
+    return _config.get("OPENAI_BASE_URL", "")
+
+
 def get_server_cmd():
     return [
         get_python_path(),
@@ -58,5 +62,6 @@ __all__ = [
     "get_ida_path",
     "get_log_dir",
     "get_openai_api_key",
+    "get_openai_base_url",
     "get_server_cmd",
 ]

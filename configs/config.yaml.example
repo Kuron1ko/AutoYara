@@ -1,3 +1,4 @@
 PYTHON_PATH: "D:/your/python/path/python.exe"
 IDA_PATH: "D:/your/ida/path/idat.exe"
 OPENAI_API_KEY: "your-openai-api-key"
+OPENAI_BASE_URL: "https://api.openai.com/v1"
