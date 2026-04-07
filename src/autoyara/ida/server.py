@@ -20,7 +20,6 @@ from mcp.server.fastmcp import FastMCP  # noqa: I001
 # 内部模块
 from configs.config import settings
 
-
 mcp = FastMCP("IDA_Pro_Analyzer")
 
 LOG_DIR = settings.log_dir
@@ -113,7 +112,7 @@ def get_hex_from_ida(elf_file_path: str, function_name: str) -> str:
     append_log(log_path, f"target_function={function_name}")
 
     fn_literal = json.dumps(function_name, ensure_ascii=False)
-    script_content = f'''# -*- coding: utf-8 -*-
+    script_content = f"""# -*- coding: utf-8 -*-
 import os
 import json
 import traceback
@@ -231,7 +230,7 @@ def main():
             ida_pro.qexit(0)
 
 main()
-    '''
+    """
 
     # 写idaapi需要的脚本
     try:
@@ -378,7 +377,7 @@ def get_function_name_by_hex(elf_file_path: str, hex_str: str) -> list:
     idb_path = os.path.join(processed_dir, base_name + ".idb")
 
     # 生成脚本
-    script_content = f'''# -*- coding: utf-8 -*-
+    script_content = f"""# -*- coding: utf-8 -*-
 import os
 import json
 import idautils
@@ -419,7 +418,7 @@ def main():
     ida_pro.qexit(0)
 
 main()
-    '''
+    """
 
     try:
         with open(script_path, "w", encoding="utf-8") as sf:
