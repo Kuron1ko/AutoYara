@@ -14,6 +14,8 @@ class Settings:
     ida_path: str
     openai_api_key: str = ""
     openai_base_url: str = ""
+    fixed_elf_path: str = ""
+    unfixed_elf_path: str = ""
 
     @property
     def log_dir(self) -> str:
@@ -33,7 +35,11 @@ class Settings:
             self.python_path,
             str(PROJECT_ROOT / "src" / "autoyara" / "ida" / "server.py"),
         ]
-
+    @property
+    def data_dir(self) -> str:
+        data_dir = os.path.join(PROJECT_ROOT, "data")
+        os.makedirs(data_dir, exist_ok=True)
+        return data_dir
 
 def _load_settings() -> Settings:
     if not CONFIG_PATH.exists():
@@ -45,6 +51,8 @@ def _load_settings() -> Settings:
     return Settings(
         python_path=data["PYTHON_PATH"],
         ida_path=data["IDA_PATH"],
+        fixed_elf_path=data["FIXED_ELF_PATH"],
+        unfixed_elf_path=data["UNFIXED_ELF_PATH"],
         openai_api_key=data.get("OPENAI_API_KEY", ""),
         openai_base_url=data.get("OPENAI_BASE_URL", ""),
     )
