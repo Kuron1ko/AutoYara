@@ -1,0 +1,4 @@
+PYTHON_PATH: "C:/Users/Sara/AppData/Local/Programs/Python/Python311/python.exe"
+IDA_PATH: "D:/your/ida/path/idat.exe"
+OPENAI_API_KEY: "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"
+OPENAI_BASE_URL: "https://openrouter.ai/api/v1"
