@@ -11,16 +11,14 @@ import traceback
 # ruff: noqa: E402
 # 需要先把 src 加入 sys.path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.."))
-src_path = os.path.join(project_root, "src")
-if src_path not in sys.path:
-    sys.path.insert(0, src_path)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
 # 第三方库
 from mcp.server.fastmcp import FastMCP  # noqa: I001
 
 # 内部模块
 from configs.config import settings
-
 
 mcp = FastMCP("IDA_Pro_Analyzer")
 
@@ -146,6 +144,9 @@ def write_json_atomic(obj, path):
         os.fsync(f.fileno())
     os.replace(tmp, path)
 
+def hex_bytes(data):
+    return ''.join(f"{{b:02X}}" for b in data)
+
 def get_function_hex():
     def find_and_extract():
         ea = idc.get_name_ea_simple(TARGET_NAME)
@@ -155,17 +156,16 @@ def get_function_hex():
             if end != idaapi.BADADDR and end > start:
                 data = idc.get_bytes(start, end - start)
                 if data:
-                    hex_str = " ".join(f"{{b:02X}}" for b in data)
+                    hex_str = hex_bytes(data)
                     return {{
                         "status": "success",
                         "func_name": TARGET_NAME,
                         "start_ea": hex(start),
                         "end_ea": hex(end),
                         "size": end - start,
-                        "hex": hex_str
+                        "hex": hex_str.upper()
                     }}
         return None
-
 
     # 等待分析
     write_stage("before auto_wait")
@@ -183,17 +183,19 @@ def get_function_hex():
         if TARGET_NAME in name:
             start = func_ea
             end = idc.get_func_attr(func_ea, idc.FUNCATTR_END)
-            if end is None or end <= start: continue
+            if end is None or end <= start:
+                continue
             data = idc.get_bytes(start, end - start)
-            if not data: continue
-            hex_str = " ".join(f"{{b:02X}}" for b in data)
+            if not data:
+                continue
+            hex_str = hex_bytes(data)
             return {{
                 "status": "success",
                 "func_name": name,
                 "start_ea": hex(start),
                 "end_ea": hex(end),
                 "size": end - start,
-                "hex": hex_str
+                "hex": hex_str.upper()
             }}
 
     return {{"status": "error", "message": f"Function not found: {{TARGET_NAME}}"}}
@@ -228,7 +230,7 @@ def main():
             ida_pro.qexit(0)
 
 main()
-"""
+    """
 
     # 写idaapi需要的脚本
     try:
@@ -344,6 +346,141 @@ main()
             f"script={script_path}\n"
             f"stage={stage_path}"
         )
+
+
+# 新增：根据 hex_str 查找包含该字节序列的所有函数名
+@mcp.tool()
+def get_function_name_by_hex(elf_file_path: str, hex_str: str) -> list:
+    """
+    遍历所有函数，提取其 hex_str，与输入的 hex_str 比较，返回包含该 hex_str 的函数名列表。
+    """
+    if not os.path.exists(elf_file_path):
+        return [f"Error: 文件不存在: {elf_file_path}"]
+    if not os.path.exists(IDA_PATH):
+        return [f"Error: IDA 路径不存在: {IDA_PATH}"]
+
+    ts = int(time.time() * 1000)
+    uniq = f"{ts}_{os.getpid()}"
+    log_path = os.path.join(LOG_DIR, f"ida_mcp_{uniq}_findhex.log")
+    temp_subdir = os.path.join(TEMP_DIR, uniq)
+    os.makedirs(temp_subdir, exist_ok=True)
+    script_path = os.path.join(temp_subdir, "script.py")
+    done_path = os.path.join(temp_subdir, "done.txt")
+    output_json_path = os.path.join(temp_subdir, "output.json")
+
+    processed_dir = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "../../../data/processed")
+    )
+    os.makedirs(processed_dir, exist_ok=True)
+    base_name = os.path.splitext(os.path.basename(elf_file_path))[0]
+    i64_path = os.path.join(processed_dir, base_name + ".i64")
+    idb_path = os.path.join(processed_dir, base_name + ".idb")
+
+    # 生成脚本
+    script_content = f"""# -*- coding: utf-8 -*-
+import os
+import json
+import idautils
+import idaapi
+import idc
+import ida_pro
+
+OUT_JSON = {output_json_path!r}
+DONE_PATH = {done_path!r}
+TARGET_HEX = {hex_str.upper()!r}
+
+def hex_bytes(data):
+    return ''.join(f"{{b:02X}}" for b in data)
+
+def main():
+    result = []
+    for func_ea in idautils.Functions():
+        name = idc.get_func_name(func_ea) or ""
+        start = func_ea
+        end = idc.get_func_attr(func_ea, idc.FUNCATTR_END)
+        if end is None or end <= start:
+            continue
+        data = idc.get_bytes(start, end - start)
+        if not data:
+            continue
+        func_hex = hex_bytes(data).upper()
+
+        if TARGET_HEX in func_hex:
+            result.append(name)
+    with open(OUT_JSON, "w", encoding="utf-8") as f:
+        json.dump(result, f, ensure_ascii=False)
+        f.flush()
+        os.fsync(f.fileno())
+    with open(DONE_PATH, "w", encoding="utf-8") as f:
+        f.write("ok")
+        f.flush()
+        os.fsync(f.fileno())
+    ida_pro.qexit(0)
+
+main()
+    """
+
+    try:
+        with open(script_path, "w", encoding="utf-8") as sf:
+            sf.write(script_content)
+    except Exception as e:
+        return [f"Error: 写脚本失败: {e}"]
+
+    if os.path.exists(i64_path):
+        ida_input = i64_path
+    elif os.path.exists(idb_path):
+        ida_input = idb_path
+    else:
+        ida_input = elf_file_path
+
+    ida_cmd = [IDA_PATH, "-A", f"-S{script_path}", ida_input]
+    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    creationflags |= getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
+
+    try:
+        p = subprocess.Popen(
+            ida_cmd,
+            stdin=subprocess.DEVNULL,
+            stdout=None,
+            stderr=None,
+            close_fds=True,
+            creationflags=creationflags,
+        )
+    except Exception as e:
+        return [f"Error: 启动 IDA 失败: {e}"]
+
+    timeout_sec = 600
+    deadline = time.time() + timeout_sec
+    result = None
+    try:
+        while time.time() < deadline:
+            if os.path.exists(done_path):
+                txt = read_text(output_json_path).strip()
+                if txt:
+                    try:
+                        result = json.loads(txt)
+                    except Exception:
+                        result = ["Error: 解析结果失败"]
+                break
+            rc = p.poll()
+            if rc is not None:
+                time.sleep(0.4)
+                txt = read_text(output_json_path).strip()
+                if txt:
+                    try:
+                        result = json.loads(txt)
+                    except Exception:
+                        result = ["Error: 解析结果失败"]
+                break
+            time.sleep(0.25)
+        if result is not None:
+            finalize_process(p, log_path)
+            return result
+        finalize_process(p, log_path)
+        return ["Error: 等待结果超时"]
+    except Exception as e:
+        finalize_process(p, log_path)
+        return [f"Error: 宿主异常: {e}"]
 
 
 if __name__ == "__main__":

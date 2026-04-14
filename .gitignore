@@ -52,10 +52,6 @@ tmp/
 
 # 爬虫/脚本生成的产物（保留 output/ 目录用 .gitkeep）
 output/*.json
-output/*.txt
-output/*.diff
-output/*.html
-output/*.log
 result.json
 report.txt
 

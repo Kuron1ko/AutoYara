@@ -2,13 +2,5 @@ PYTHON_PATH: "D:/your/python/path/python.exe"
 IDA_PATH: "D:/your/ida/path/idat.exe"
 OPENAI_API_KEY: "your-openai-api-key"
 OPENAI_BASE_URL: "https://api.openai.com/v1"
-
-# 以下为可选：月度爬取 GitCode 公告 / commit / 源码 blob 时强烈建议配置
-# （也可不设此处，改用系统环境变量，见下方说明）
-# GitCode 个人令牌 → 请求头 private-token，用于 API 拉 diff、contents、commits
-GITCODE_PRIVATE_TOKEN: ""
-# GitHub PAT（read-only 即可）→ 提高 api.github.com 限额，解析 OH 镜像在 GitHub 上的 parent 等
-GITHUB_TOKEN: ""
-# Gitee 私人令牌（可选）→ 作为 Open API access_token，减轻批量拉 PR 元数据时的匿名 403 频控
-# PR 统一补丁已优先走 https://gitee.com/.../pulls/N.diff，多数情况无需此项
-GITEE_ACCESS_TOKEN: ""
+FIXED_ELF_PATH: "D:/fixed/elf/path"
+UNFIXED_ELF_PATH: "D:/unfixed/elf/path"
