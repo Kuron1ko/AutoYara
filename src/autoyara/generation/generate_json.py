@@ -17,14 +17,13 @@ _SYSTEM_PROMPT = """\
 仅返回最终生成的JSON字符串，不要添加注释或markdown格式
 """
 
-def generate_json(meta_dict: dict,client: SyncLLMClient | None = None):
 
+def generate_json(meta_dict: dict, client: SyncLLMClient | None = None):
     cve_id = meta_dict.get("cve")
     own_client = client is None
     if own_client:
         client = SyncLLMClient()
     try:
-
         with open(Path("configs/templates/meta_example.json"), encoding="utf-8") as f:
             example = json.load(f)
         with open(Path("configs/templates/metadata.json.j2"), encoding="utf-8") as f:
@@ -49,7 +48,7 @@ def generate_json(meta_dict: dict,client: SyncLLMClient | None = None):
         print(data)
         with open(out_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
-       # print(f"【generate_json】 已生成 {out_path}")
+    # print(f"【generate_json】 已生成 {out_path}")
 
     except Exception as exc:
         print(f"【generator】 失败: {exc}")

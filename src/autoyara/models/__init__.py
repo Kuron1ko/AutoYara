@@ -34,9 +34,11 @@ class CollectorConfig:
     cve_override: str = "MANUAL"
     local_patch_path: str | None = None
 
+
 @dataclass(slots=True)
 class YaraValidationResult:
     """yara文件测试结果。"""
+
     cve_id: str
     fixed_matched: bool
     unfixed_matched: bool

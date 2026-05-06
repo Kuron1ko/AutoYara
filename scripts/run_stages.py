@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
-"""
-
-"""
+""" """
 
 from __future__ import annotations
 
-import argparse
 import json
 import re
 import sys
 import time
 from pathlib import Path
 from contextlib import redirect_stdout, redirect_stderr
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 for p in (REPO_ROOT, REPO_ROOT / "src"):
     s = str(p)
@@ -34,8 +32,12 @@ from autoyara.generation.generate_yara import generate_yara
 from autoyara.llm.sync_client import SyncLLMClient
 from autoyara.validation.runner import checkcve
 from autoyara.ida.server import get_hex_from_ida
-from autoyara.models import sync_function_line_arrays, to_legacy_result_dict, YaraValidationResult
+from autoyara.models import (
+    sync_function_line_arrays,
+    to_legacy_result_dict,
+)
 from configs.config import settings
+
 _apply_tokens_from_config_yaml()
 
 FIXED_ELF_PATH = settings.fixed_elf_path
@@ -45,14 +47,18 @@ log_dir = REPO_ROOT / "logs"
 log_dir.mkdir(exist_ok=True)
 log_path = log_dir / f"test_all_{time.strftime('%Y%m%d_%H%M%S')}.txt"
 
+
 def log(s):
     with open(log_path, "a", encoding="utf-8") as f:
         f.write(str(s) + "\n")
 
+
 def call_function(func, *args, **kwargs):
-    with open(log_path, "a", encoding="utf-8") as f, redirect_stdout(
-        f
-    ), redirect_stderr(f):
+    with (
+        open(log_path, "a", encoding="utf-8") as f,
+        redirect_stdout(f),
+        redirect_stderr(f),
+    ):
         return func(*args, **kwargs)
 
 
@@ -96,15 +102,13 @@ def build_item(cve_id: str, url: str, meta: dict) -> dict:
     return {}
 
 
-def run_collector(year,month,limit=50,do_llm=True) -> None:
-
-
+def run_collector(year, month, limit=50, do_llm=True) -> None:
     YEAR, MONTH, LIMIT = year, month, limit
 
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"【collector】OpenHarmony 安全公告 {YEAR}-{MONTH:02d}  前 {LIMIT} 个 CVE")
     print(f"【LLM】LLM 质量审查: {'启用' if do_llm else '跳过'}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     # ── 1. 拉公告 ───────────────────────────────────
     print("【collector】 拉取公告")
@@ -122,37 +126,34 @@ def run_collector(year,month,limit=50,do_llm=True) -> None:
     seen_cve: dict[str, dict] = {}
     for lk in all_links:
         cve = (lk.get("cve") or lk.get("cve_id") or "").upper()
-        if cve and cve not in seen_cve :
+        if cve and cve not in seen_cve:
             seen_cve[cve] = lk
 
     cve_list = list(seen_cve.items())[:LIMIT]
-    print(f"【collector】 CVElist : ",end='')
-    for cve, lk in cve_list:
+    print("【collector】 CVElist : ", end="")
+    for cve, _lk in cve_list:
         print(f" {cve}  ")
 
     # ── 3. 逐个爬取 ──────────────────────────────────
-    print(f"【collector】逐个爬取CVE")
+    print("【collector】逐个爬取CVE")
     client = SyncLLMClient() if do_llm else None
     all_results: list[dict] = []
 
     try:
-        for idx, (cve_id, lk) in enumerate(cve_list, 1):
+        for _idx, (cve_id, lk) in enumerate(cve_list, 1):
             url = lk.get("url") or lk.get("reference_url") or ""
-
 
             item = build_item(cve_id, url, lk)
             if not item:
                 continue
 
-            t0 = time.time()
-
-
             try:
-                models = call_function(process_item, item, quality_check=do_llm, llm_client=client)
-            except Exception as e:
+                models = call_function(
+                    process_item, item, quality_check=do_llm, llm_client=client
+                )
+            except Exception:
                 models = []
 
-            elapsed = time.time() - t0
             for m in models:
                 row = to_legacy_result_dict(m)
                 if m.validation is not None:
@@ -218,7 +219,7 @@ def run_collector(year,month,limit=50,do_llm=True) -> None:
     if do_llm:
         print(f"【LLM】 LLM 审查: 通过={ok} 未通过={fail} 未审={skip}")
 
-    seen_cves_out =[]
+    seen_cves_out = []
     seen_cves_result = []
     for r in all_results:
         cve_out = r.get("cve") or r.get("cve_id", "")
@@ -226,32 +227,33 @@ def run_collector(year,month,limit=50,do_llm=True) -> None:
             seen_cves_out.append(cve_out)
             seen_cves_result.append(r)
 
-
     print(f"  成功 CVE: {seen_cves_out}")
 
     # 枚举所有成功的 CVE，写入 /data/processed/cveid/cveinfo.json
-    for r in seen_cves_result: 
-        cve_id= r.get("cve") or r.get("cve_id", "")
+    for r in seen_cves_result:
+        cve_id = r.get("cve") or r.get("cve_id", "")
         if cve_id:
             out_dir = REPO_ROOT / "data" / "processed" / cve_id
             out_dir.mkdir(parents=True, exist_ok=True)
             out_path = out_dir / "cveinfo.json"
-            out_path.write_text(json.dumps(r, ensure_ascii=False, indent=2), encoding="utf-8")
+            out_path.write_text(
+                json.dumps(r, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
     return seen_cves_result
 
 
 def run_generator(cves_result) -> None:
-    print("="*60)
+    print("=" * 60)
     print("【generator】开始生成yara/json文件")
-    print("="*60)
+    print("=" * 60)
 
-    for cveitem in cves_result :
+    for cveitem in cves_result:
         cve_id = cveitem.get("cve") or cveitem.get("cve_id", "")
         function_name = cveitem.get("function_name", "")
-        ida_name = function_name.split('(', 1)[0].strip().split()[-1].lstrip('*&')
+        ida_name = function_name.split("(", 1)[0].strip().split()[-1].lstrip("*&")
         ida_result = get_hex_from_ida(FIXED_ELF_PATH, ida_name)
-        hex_str=ida_result.split('\n',1)[1].strip()
-        hex_str=hex_str.split('\n',1)[0].strip()
+        hex_str = ida_result.split("\n", 1)[1].strip()
+        hex_str = hex_str.split("\n", 1)[0].strip()
 
         print(f"【generator】生成 {cve_id} 的json文件")
         call_function(generate_json, cveitem)
@@ -259,21 +261,22 @@ def run_generator(cves_result) -> None:
         call_function(generate_yara, cveitem, hex_str)
         print(f"【generator】已生成 {cve_id}")
     pass
+
+
 def run_validator(cves_result) -> None:
-    print("="*60)
+    print("=" * 60)
     print("【validator】开始验证yara文件")
-    print("="*60)
+    print("=" * 60)
     fail_cves = []
     success_cves = []
-    for cveitem in cves_result :
-        cve_id= cveitem.get("cve") or cveitem.get("cve_id", "")
+    for cveitem in cves_result:
+        cve_id = cveitem.get("cve") or cveitem.get("cve_id", "")
         print(f"【validator】验证 {cve_id}")
         result = checkcve(cve_id)
         if result.return_code == 0:
             success_cves.append(cve_id)
             print(f"【validator】 {cve_id} 验证通过")
-        else :
+        else:
             fail_cves.append(cve_id)
             print(f"【validator】 {cve_id} 验证失败")
     print(f"【validator】验证完成\n 成功: {len(success_cves)} \n失败: {len(fail_cves)}")
-

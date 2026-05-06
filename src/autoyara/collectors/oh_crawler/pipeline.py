@@ -378,9 +378,7 @@ def process_item(
                     and llm_client is not None
                 ):
                     meta_sum = summarize_bulletin_fields(
-                        description,
-                        cve_id,
-                        client=llm_client
+                        description, cve_id, client=llm_client
                     )
                     if not vuln_type:
                         vuln_type = meta_sum.get("vuln_type", "")

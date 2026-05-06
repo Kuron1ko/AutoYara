@@ -41,7 +41,6 @@ _SYSTEM_PROMPT = """\
 """
 
 
-
 @dataclass
 class QualityCheckResult:
     """LLM 质量校验结果。"""
@@ -123,7 +122,7 @@ def _annotate_function(code: str | None) -> str:
 
 def check_quality(
     description: str,
-    vuln_type :str,
+    vuln_type: str,
     vuln_impact: str,
     vulnerable_function: str,
     fixed_function: str,
@@ -157,9 +156,9 @@ def check_quality(
                 {"role": "user", "content": user_content},
             ]
         )
-        print("="*30)
+        print("=" * 30)
         print(raw)
-        print("="*30)
+        print("=" * 30)
         data = parse_llm_json(raw)
         result = QualityCheckResult(
             overall_ok=bool(data.get("overall_ok", False)),
@@ -216,7 +215,6 @@ def summarize_bulletin_fields(
     *,
     client: SyncLLMClient | None = None,
 ) -> dict[str, str]:
-
     """从 NVD 英文描述提炼简短的「漏洞描述」和「漏洞影响」（专用于三方库 CVE）。
 
     Returns:

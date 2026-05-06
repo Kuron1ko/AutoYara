@@ -475,7 +475,7 @@ def fetch_diff_text(item):
 
             print(
                 f"  [pr-topo] first={pr_first_sha[:12]} head={pr_head_sha[:12]} "
-                f"base={( base_sha or 'None')[:12]}"
+                f"base={(base_sha or 'None')[:12]}"
             )
 
             if base_sha and pr_head_sha and base_sha != pr_head_sha:

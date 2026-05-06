@@ -56,6 +56,7 @@ class ValidationResult:
     failed_checks: list[str] = field(default_factory=list)
     details: str = ""
 
+
 @dataclass(slots=True)
 class GenerationResult:
     """YARA 规则生成结果。"""

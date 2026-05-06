@@ -14,7 +14,7 @@ def test_parse_plain_json():
 
 
 def test_parse_fenced_json():
-    raw = "```json\n{\"ok\": true, \"name\": \"cve\"}\n```"
+    raw = '```json\n{"ok": true, "name": "cve"}\n```'
     data = parse_llm_json(raw)
     assert data == {"ok": True, "name": "cve"}
 
