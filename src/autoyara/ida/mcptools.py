@@ -52,7 +52,11 @@ async def _call_mcp_tool(tool_name, tool_args):
                 if result.isError:
                     print(f"[!] MCP tool error: {result.content}")
                     return f"Error: {result.content}"
-                texts = [content.text for content in result.content if hasattr(content, "text")]
+                texts = [
+                    content.text
+                    for content in result.content
+                    if hasattr(content, "text")
+                ]
                 if texts:
                     print(f"[*] MCP tool {tool_name} returned success")
                     return "\n".join(texts)
@@ -148,7 +152,7 @@ def get_hex_by_address_range(elf_file_path, start_addr, end_addr):
                 "end_addr": end_addr,
             },
         )
-    ) 
+    )
     return ret
 
 

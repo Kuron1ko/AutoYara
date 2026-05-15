@@ -28,7 +28,9 @@ def checkcve(
     unfixed_elf_path: str | None = None,
 ):
     target_id = artifact_id or cve_id
-    cve_yara_path = Path(settings.data_dir) / "processed" / target_id / f"{target_id}.yara"
+    cve_yara_path = (
+        Path(settings.data_dir) / "processed" / target_id / f"{target_id}.yara"
+    )
 
     # Validation depends on the generated YARA rule only.
     if not cve_yara_path.exists():

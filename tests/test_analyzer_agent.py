@@ -138,8 +138,5 @@ def test_analyzer_ignores_same_turn_final_answer_and_uses_tool_hex():
     assert result.success is True
     assert result.diff_analysis == "real final"
     assert result.explanation == "tool-backed"
-    assert (
-        result.raw_hex
-        == "E0 85 8A D2 C2 F2 00 F0 42 80 2A 91 00 42 A9 F2"
-    )
+    assert result.raw_hex == "E0 85 8A D2 C2 F2 00 F0 42 80 2A 91 00 42 A9 F2"
     assert agent.llm.calls == 2

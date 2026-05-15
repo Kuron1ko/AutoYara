@@ -69,4 +69,3 @@ def generate_yara(cveitem: dict, hex_str: str) -> None:
     out_path = os.path.join(out_dir, f"{artifact_id}.yara")
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(output)
-

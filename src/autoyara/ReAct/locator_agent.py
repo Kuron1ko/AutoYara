@@ -160,7 +160,9 @@ Remember:
             try:
                 data = json.loads(block)
                 if isinstance(data, dict):
-                    if "thought" in data and ("action" in data or "final_answer" in data):
+                    if "thought" in data and (
+                        "action" in data or "final_answer" in data
+                    ):
                         return data
             except json.JSONDecodeError:
                 continue
@@ -221,7 +223,10 @@ Remember:
                     action_input["elf_file_path"] = task.target_binary
 
                 if action == "get_disassembly_by_address_range":
-                    if "start_address" in action_input and "start_addr" not in action_input:
+                    if (
+                        "start_address" in action_input
+                        and "start_addr" not in action_input
+                    ):
                         action_input["start_addr"] = action_input.pop("start_address")
                     if "end_address" in action_input and "end_addr" not in action_input:
                         action_input["end_addr"] = action_input.pop("end_address")
@@ -230,7 +235,10 @@ Remember:
                     "start_addr" in action_input or "start_address" in action_input
                 ):
                     action = "get_disassembly_by_address_range"
-                    if "start_address" in action_input and "start_addr" not in action_input:
+                    if (
+                        "start_address" in action_input
+                        and "start_addr" not in action_input
+                    ):
                         action_input["start_addr"] = action_input.pop("start_address")
                     if "end_address" in action_input and "end_addr" not in action_input:
                         action_input["end_addr"] = action_input.pop("end_address")
@@ -270,16 +278,12 @@ Remember:
                 not_found_hit = (
                     "找不到函数" in obs_text or "Function not found" in obs_text
                 )
-                if (
-                    not_found_hit
-                    and action
-                    in {
-                        "get_decompiled_code",
-                        "get_disassembly_code",
-                        "get_hex_by_decompiled_snippet",
-                        "get_hex_by_code_snippet",
-                    }
-                ):
+                if not_found_hit and action in {
+                    "get_decompiled_code",
+                    "get_disassembly_code",
+                    "get_hex_by_decompiled_snippet",
+                    "get_hex_by_code_snippet",
+                }:
                     not_found_streak += 1
                 else:
                     not_found_streak = 0
@@ -289,10 +293,14 @@ Remember:
                         "to avoid wasted retries"
                     )
                     logger.error("early_stop", stop_reason)
-                    state.steps.append(AgentStep(thought, action, action_input, obs_text))
+                    state.steps.append(
+                        AgentStep(thought, action, action_input, obs_text)
+                    )
                     break
 
-                state.steps.append(AgentStep(thought, action, action_input, str(observation)))
+                state.steps.append(
+                    AgentStep(thought, action, action_input, str(observation))
+                )
                 history += (
                     f"\nThought: {thought}\nAction: {action}\n"
                     f"Action Input: {json.dumps(action_input)}\nObservation: {observation}"
@@ -335,7 +343,8 @@ Remember:
                         )
                         continue
                     has_real_disasm = any(
-                        s.action in {"get_disassembly_code", "get_disassembly_by_address_range"}
+                        s.action
+                        in {"get_disassembly_code", "get_disassembly_by_address_range"}
                         and not str(s.observation).strip().startswith("Error")
                         for s in state.steps
                     )
@@ -365,7 +374,9 @@ Remember:
                     else ("" if code_seg_raw is None else str(code_seg_raw))
                 )
                 fn_raw = final_answer.get("function_name")
-                fn_val = fn_raw if isinstance(fn_raw, str) and fn_raw else task.function_name
+                fn_val = (
+                    fn_raw if isinstance(fn_raw, str) and fn_raw else task.function_name
+                )
                 reasoning_raw = final_answer.get("reasoning", "")
                 reasoning = (
                     reasoning_raw

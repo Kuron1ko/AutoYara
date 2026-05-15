@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """ """
 
 from __future__ import annotations
@@ -149,9 +149,11 @@ def _resolve_versioned_elf(base_path: str, version_value, role: str) -> str:
 
 
 def call_function(func, *args, **kwargs):
-    with open(log_path, "a", encoding="utf-8") as f, redirect_stdout(
-        f
-    ), redirect_stderr(f):
+    with (
+        open(log_path, "a", encoding="utf-8") as f,
+        redirect_stdout(f),
+        redirect_stderr(f),
+    ):
         return func(*args, **kwargs)
 
 
@@ -196,7 +198,6 @@ def build_item(cve_id: str, url: str, meta: dict) -> dict:
 
 
 def run_collector(year, month, start=1, end=50, do_llm=True) -> None:
-
 
     YEAR, MONTH, START, END = year, month, start, end
     if START < 1 or END < 1:
@@ -251,7 +252,7 @@ def run_collector(year, month, start=1, end=50, do_llm=True) -> None:
     all_results: list[dict] = []
 
     try:
-        for _idx, ((cve_id, ver), lk) in enumerate(cve_list, 1):
+        for _idx, ((cve_id, _ver), lk) in enumerate(cve_list, 1):
             url = lk.get("url") or lk.get("reference_url") or ""
 
             item = build_item(cve_id, url, lk)
@@ -259,8 +260,10 @@ def run_collector(year, month, start=1, end=50, do_llm=True) -> None:
                 continue
 
             try:
-                models = call_function(process_item, item, quality_check=do_llm, llm_client=client)
-            except :
+                models = call_function(
+                    process_item, item, quality_check=do_llm, llm_client=client
+                )
+            except Exception:
                 models = []
 
             for m in models:
@@ -325,7 +328,7 @@ def run_collector(year, month, start=1, end=50, do_llm=True) -> None:
         )
         print(f"[collector] report generated: {report_path}")
 
-    seen_cves_out =[]
+    seen_cves_out = []
     seen_cves_result = []
     for r in all_results:
         cve_out = r.get("cve") or r.get("cve_id", "")
@@ -333,7 +336,7 @@ def run_collector(year, month, start=1, end=50, do_llm=True) -> None:
         key = f"{cve_out}@{'|'.join(ver_list) if ver_list else 'unknown'}"
         if r.get("quality_ok") is True and key not in seen_cves_out:
             seen_cves_out.append(key)
-        if r.get("quality_ok") is True :
+        if r.get("quality_ok") is True:
             seen_cves_result.append(r)
     if do_llm:
         print(f"[LLM] passed={len(seen_cves_result)}")
@@ -355,14 +358,15 @@ def run_collector(year, month, start=1, end=50, do_llm=True) -> None:
             )
     return seen_cves_result
 
+
 def run_validator(cves_result) -> None:
-    print("="*60)
+    print("=" * 60)
     print("[validator] start validating yara files")
-    print("="*60)
+    print("=" * 60)
     fail_cves = []
     success_cves = []
-    for cveitem in cves_result :
-        cve_id= cveitem.get("cve") or cveitem.get("cve_id", "")
+    for cveitem in cves_result:
+        cve_id = cveitem.get("cve") or cveitem.get("cve_id", "")
         versions = _version_list(cveitem.get("version"))
         artifact_id = _artifact_id(cve_id, versions)
         fixed_elf_path = _resolve_versioned_elf(FIXED_ELF_PATH, versions, "fixed")
@@ -382,19 +386,17 @@ def run_validator(cves_result) -> None:
         else:
             fail_cves.append(key)
             print(f"[validator] {key} fail")
-    print(
-        f"[validator] done\n success: {len(success_cves)} \nfail: {len(fail_cves)}"
-    )
+    print(f"[validator] done\n success: {len(success_cves)} \nfail: {len(fail_cves)}")
     if len(success_cves) > 0:
         return 1
-    else :
+    else:
         return 0
 
 
 def run_generator(cves_result) -> None:
-    print("="*60)
+    print("=" * 60)
     print("[generator] start generating yara/json files")
-    print("="*60)
+    print("=" * 60)
 
     client = create_sync_client()
     locator_agent = LocatorAgent(llm_client=client)
@@ -402,7 +404,7 @@ def run_generator(cves_result) -> None:
 
     success_keys = []
 
-    for cveitem in cves_result :
+    for cveitem in cves_result:
         cve_id = cveitem.get("cve", "")
         versions = _version_list(cveitem.get("version"))
         version_text = "/".join(versions) if versions else "unknown"
@@ -436,23 +438,21 @@ def run_generator(cves_result) -> None:
             cve_id=cveitem.get("cve", ""),
             target_binary=unfixed_elf_path,
             description=(
-                cveitem.get("vuln_description")
-                or cveitem.get("description", "")
+                cveitem.get("vuln_description") or cveitem.get("description", "")
             ),
             vulnerable_code=cveitem.get("vulnerable_function", ""),
             fixed_code=cveitem.get("fixed_function", ""),
-            function_name=ida_name
+            function_name=ida_name,
         )
         vuln_res = locator_agent.run(task)
         task.target_binary = fixed_elf_path
         fixed_res = locator_agent.run(task)
         analyze_res = analyzer_agent.run(vuln_res, fixed_res, fixed_elf_path)
 
-
         hex_str = analyze_res.raw_hex
-        print("="*20)
+        print("=" * 20)
         print(analyze_res)
-        #exit(0)
+        # exit(0)
         resolved_function_name = (
             fixed_res.function_name or vuln_res.function_name or ida_name
         )
@@ -482,11 +482,11 @@ def run_generator(cves_result) -> None:
             },
         }
 
-        log("="*20+"vuln_res"+"="*20)
+        log("=" * 20 + "vuln_res" + "=" * 20)
         log(vuln_res)
-        log("="*20+"fixed_res"+"="*20)
+        log("=" * 20 + "fixed_res" + "=" * 20)
         log(fixed_res)
-        log("="*20+"analyze_res"+"="*20)
+        log("=" * 20 + "analyze_res" + "=" * 20)
         log(analyze_res)
         print(f"[generator] {success_key} feature:", end="")
         print(hex_str)
@@ -500,13 +500,12 @@ def run_generator(cves_result) -> None:
         call_function(generate_yara, yara_meta, hex_str)
         print(f"[generator] generated {success_key}")
 
-        cve_res=[]
+        cve_res = []
         cve_res.append(yara_meta)
-        if run_validator(cve_res) :
+        if run_validator(cve_res):
             success_keys.append(success_key)
             print(f"[generator] {success_key} generation pass")
 
     pass
 
     return len(success_keys)
-

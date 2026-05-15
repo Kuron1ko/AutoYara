@@ -4,8 +4,7 @@ import argparse
 import json
 import re
 from pathlib import Path
-from typing import Iterable
-
+from collections.abc import Iterable
 
 LICENSE_HEADER = """/*
  * Copyright (c) 2026 Beijing University of Posts and Telecommunications
@@ -48,7 +47,9 @@ def _extract_meta_block(yara_text: str) -> str:
         content = line.strip()
         if content:
             normalized.append(f"        {content}")
-    return "\n".join(normalized) if normalized else '        date = ""\n        file = ""'
+    return (
+        "\n".join(normalized) if normalized else '        date = ""\n        file = ""'
+    )
 
 
 def _extract_condition(yara_text: str) -> str:
@@ -85,7 +86,9 @@ def _version_from_names(cve_id: str, folder_name: str, file_name: str) -> str:
     return "unknown"
 
 
-def _iter_candidate_yaras(cve_id: str, processed_dir: Path) -> Iterable[tuple[str, Path]]:
+def _iter_candidate_yaras(
+    cve_id: str, processed_dir: Path
+) -> Iterable[tuple[str, Path]]:
     for folder in sorted(processed_dir.iterdir(), key=lambda p: p.name):
         if not folder.is_dir():
             continue
@@ -105,7 +108,9 @@ def _iter_candidate_yaras(cve_id: str, processed_dir: Path) -> Iterable[tuple[st
         yield version, yara_file
 
 
-def _iter_candidate_jsons(cve_id: str, processed_dir: Path) -> Iterable[tuple[str, Path]]:
+def _iter_candidate_jsons(
+    cve_id: str, processed_dir: Path
+) -> Iterable[tuple[str, Path]]:
     for folder in sorted(processed_dir.iterdir(), key=lambda p: p.name):
         if not folder.is_dir():
             continue
@@ -270,7 +275,9 @@ def merge_json(cve_id: str) -> Path:
 
         affected_versions = vul.get("affected_versions")
         if isinstance(affected_versions, list):
-            merged_versions.extend(str(x).strip() for x in affected_versions if str(x).strip())
+            merged_versions.extend(
+                str(x).strip() for x in affected_versions if str(x).strip()
+            )
         else:
             v_clean = str(version).strip()
             if v_clean and v_clean != "unknown":
@@ -287,12 +294,16 @@ def merge_json(cve_id: str) -> Path:
     out_dir = processed_dir / cve_id
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{cve_id}.json"
-    out_path.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
+    out_path.write_text(
+        json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     return out_path
 
 
 def _main() -> int:
-    parser = argparse.ArgumentParser(description="Merge versioned YARA rules by CVE id.")
+    parser = argparse.ArgumentParser(
+        description="Merge versioned YARA rules by CVE id."
+    )
     parser.add_argument("cve_id", help="CVE id, e.g. CVE-2026-33565")
     parser.add_argument("--json", action="store_true", help="also generate merged json")
     args = parser.parse_args()
@@ -310,4 +321,3 @@ if __name__ == "__main__":
 
 
 __all__ = ["merge_yara", "merge_json"]
-

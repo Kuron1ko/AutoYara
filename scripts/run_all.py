@@ -35,7 +35,7 @@ if __name__ == "__main__":
             success.append(cves_result[0].get("cve"))
         else:
             fail.append(cves_result[0].get("cve"))
-    
+
     for cve_id in dict.fromkeys(success):
         if not cve_id:
             continue

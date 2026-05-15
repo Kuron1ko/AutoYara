@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Callable
+from collections.abc import Any, Callable
 
 from autoyara.ida.mcptools import (
     get_decompiled_code,
@@ -77,7 +77,7 @@ GUIDELINES & REASONING FLOW:
 1. **Locate**: Start by getting the decompiled code of the target function to verify its structure matches the source code provided.
 2. **Analyze Diff**: Compare the decompiled code with the vulnerable/fixed source code to identify the exact lines of code that were changed.
 3. **Identify Vulnerable Pattern**: Look for unique logic in the vulnerable version that is absent or changed in the fixed version. Focus on constants, specific API calls, or unique control flow.
-4. **Extract Hex**: 
+4. **Extract Hex**:
    - Use `get_hex_by_decompiled_snippet` to get hex for the specific vulnerable logic you identified.
    - Alternatively, use `get_disassembly_code` and then `get_hex_by_code_snippet` for more precision.
 5. **Verify Uniqueness**: Use `get_function_name_by_hex` to ensure the extracted hex pattern doesn't match too many unrelated functions.
@@ -129,7 +129,7 @@ Begin!
         for step_idx in range(self.max_steps):
             logger.info("step", f"--- Step {step_idx + 1} ---")
             response = self.llm.prompt(history)
-           # print(f"LLM Response:\n{history}\n")
+            # print(f"LLM Response:\n{history}\n")
             logger.debug("llm_response_raw", response)
             payload = self._parse_llm_json(response)
             if payload is None:

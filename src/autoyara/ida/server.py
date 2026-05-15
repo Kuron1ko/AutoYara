@@ -107,7 +107,6 @@ def _run_ida_script(
     os.makedirs(temp_subdir, exist_ok=True)
 
     script_path = os.path.join(temp_subdir, "script.py")
-    stage_path = os.path.join(temp_subdir, "stage.txt")
     done_path = os.path.join(temp_subdir, "done.txt")
     output_json_path = os.path.join(temp_subdir, "output.json")
 

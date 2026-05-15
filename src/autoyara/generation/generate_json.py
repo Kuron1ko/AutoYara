@@ -20,6 +20,7 @@ _SYSTEM_PROMPT = """\
 仅返回最终生成的JSON字符串，不要添加注释或markdown格式
 """
 
+
 def _version_list(value) -> list[str]:
     if isinstance(value, list):
         out = []
@@ -83,7 +84,9 @@ def generate_json(meta_dict: dict, client: SyncLLMClient | None = None):
         )
 
         data = parse_llm_json(raw)
-        out_path = REPO_ROOT / "data" / "processed" / artifact_id / f"{artifact_id}.json"
+        out_path = (
+            REPO_ROOT / "data" / "processed" / artifact_id / f"{artifact_id}.json"
+        )
         out_path.parent.mkdir(parents=True, exist_ok=True)
         print(data)
         with open(out_path, "w", encoding="utf-8") as f:

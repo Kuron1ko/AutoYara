@@ -53,7 +53,9 @@ def _read_log_level() -> str:
 
 def _build_log_path(prefix: str, task_id: str) -> str:
     ts = int(time.time())
-    safe_task_id = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in task_id)
+    safe_task_id = "".join(
+        ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in task_id
+    )
     return os.path.join(settings.log_dir, f"{prefix}_{safe_task_id}_{ts}.log")
 
 
@@ -65,7 +67,9 @@ class RuntimeLogger:
 
     def log(self, detail: str, message: str, level: str = DEFAULT_LEVEL) -> None:
         level_text = (level or DEFAULT_LEVEL).upper()
-        threshold = _LEVEL_PRIORITY.get(self.min_level.upper(), _LEVEL_PRIORITY[DEFAULT_LEVEL])
+        threshold = _LEVEL_PRIORITY.get(
+            self.min_level.upper(), _LEVEL_PRIORITY[DEFAULT_LEVEL]
+        )
         current = _LEVEL_PRIORITY.get(level_text, _LEVEL_PRIORITY["ERROR"])
         if current < threshold:
             return

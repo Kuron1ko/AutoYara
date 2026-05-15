@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Any, Callable
 from dataclasses import dataclass
-from typing import Any, Callable
 
 from autoyara.ida.mcptools import get_hex_by_address_range
 from autoyara.llm.sync_client import SyncLLMClient
@@ -284,7 +284,9 @@ After receiving the tool result, respond with JSON only:
                 try:
                     observation = self.tools[action](**action_input)
                     logger.info("observation", str(observation)[:200] + "...")
-                    if action == "get_hex_by_address_range" and "Error" not in str(observation):
+                    if action == "get_hex_by_address_range" and "Error" not in str(
+                        observation
+                    ):
                         hex_extracted = True
                         extracted_hex = self._extract_hex_candidate(observation)
                         if extracted_hex:
@@ -340,7 +342,10 @@ After receiving the tool result, respond with JSON only:
                     continue
 
                 if hex_candidate:
-                    if final_answer.get("raw_hex") and final_answer.get("raw_hex") != hex_candidate:
+                    if (
+                        final_answer.get("raw_hex")
+                        and final_answer.get("raw_hex") != hex_candidate
+                    ):
                         logger.warn(
                             "validation",
                             "Replacing model-provided raw_hex with tool-extracted bytes.",
@@ -357,7 +362,9 @@ After receiving the tool result, respond with JSON only:
                     raw_output=response,
                 )
 
-            logger.error("error", f"No actionable tool call or final answer: {response}")
+            logger.error(
+                "error", f"No actionable tool call or final answer: {response}"
+            )
             break
 
         return AnalyzerResult(
