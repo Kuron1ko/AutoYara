@@ -61,3 +61,7 @@ report.txt
 # OS
 .DS_Store
 Thumbs.db
+
+configs/config.yaml
+
+data/processed

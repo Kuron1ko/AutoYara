@@ -21,27 +21,52 @@ FIXED_ELF_PATH = settings.fixed_elf_path
 UNFIXED_ELF_PATH = settings.unfixed_elf_path
 
 
-def checkcve(cve_id):
-    cve_json_path = Path(settings.data_dir) / "processed" / cve_id / f"{cve_id}.json"
-    cve_yara_path = Path(settings.data_dir) / "processed" / cve_id / f"{cve_id}.yara"
+def checkcve(
+    cve_id,
+    artifact_id: str | None = None,
+    fixed_elf_path: str | None = None,
+    unfixed_elf_path: str | None = None,
+):
+    target_id = artifact_id or cve_id
+    cve_yara_path = Path(settings.data_dir) / "processed" / target_id / f"{target_id}.yara"
 
-    if not cve_json_path.exists() or not cve_yara_path.exists():
+    # Validation depends on the generated YARA rule only.
+    if not cve_yara_path.exists():
         return YaraValidationResult(
             cve_id=cve_id,
             fixed_matched=0,
             unfixed_matched=0,
             return_code=-1,
-            message=f"未找到 {cve_id} 的 JSON 或 YARA 文件",
+            message=f"missing YARA file for {target_id}",
         )
 
     # 检测 fixed 文件
-    fixed_cmd = [str(yara_path), str(cve_yara_path), str(FIXED_ELF_PATH)]
+    fixed_target = fixed_elf_path or FIXED_ELF_PATH
+    unfixed_target = unfixed_elf_path or UNFIXED_ELF_PATH
+    if not Path(fixed_target).exists():
+        return YaraValidationResult(
+            cve_id=cve_id,
+            fixed_matched=0,
+            unfixed_matched=0,
+            return_code=-1,
+            message=f"missing fixed ELF: {fixed_target}",
+        )
+    if not Path(unfixed_target).exists():
+        return YaraValidationResult(
+            cve_id=cve_id,
+            fixed_matched=0,
+            unfixed_matched=0,
+            return_code=-1,
+            message=f"missing unfixed ELF: {unfixed_target}",
+        )
+
+    fixed_cmd = [str(yara_path), str(cve_yara_path), str(fixed_target)]
     fixed_result = subprocess.run(fixed_cmd, capture_output=True, text=True)
     fixed_output = fixed_result.stdout.strip()
     fixed_matched = bool(fixed_output)
 
     # 检测 unfixed 文件
-    unfixed_cmd = [str(yara_path), str(cve_yara_path), str(UNFIXED_ELF_PATH)]
+    unfixed_cmd = [str(yara_path), str(cve_yara_path), str(unfixed_target)]
     unfixed_result = subprocess.run(unfixed_cmd, capture_output=True, text=True)
     unfixed_output = unfixed_result.stdout.strip()
     unfixed_matched = bool(unfixed_output)

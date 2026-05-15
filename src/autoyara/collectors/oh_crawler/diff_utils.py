@@ -388,9 +388,11 @@ def fetch_diff_text(item):
             t = get(gitee_pull_api_url(api_owner, url_repo, num))
             if t:
                 try:
-                    sha = json.loads(t).get("merge_commit_sha")
-                    if sha:
-                        candidate_shas.append(sha)
+                    gitee_sha = json.loads(t).get("merge_commit_sha")
+                    # 不覆盖已从 GitCode 获取到的有效 sha
+                    if gitee_sha:
+                        sha = sha or gitee_sha
+                        candidate_shas.append(gitee_sha)
                         break
                 except Exception:
                     pass

@@ -22,7 +22,7 @@ _SYSTEM_PROMPT = """\
 你需要逐一判断每个字段是否完整有效，并以 JSON 格式返回结果。
 
 判断标准：
-- 漏洞描述，漏洞类型(type)和漏洞影响(impact)，只要有这三个字段就判断为合格
+- 漏洞描述，漏洞类型(type)和漏洞影响(impact)。描述可以缺少，但一定要有类型和影响字段
   仅有 git commit message（如 "Fix CVE-xxx"）、文件路径或补丁名称列表均不合格。
 - 修复前函数：必须是完整的 C/C++ 函数体（有签名、函数体、闭合花括号）；
   以注释 "/* patch context - source file unavailable */" 开头的是 diff 上下文片段，不合格。

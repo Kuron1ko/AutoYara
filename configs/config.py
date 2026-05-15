@@ -16,6 +16,9 @@ class Settings:
     openai_base_url: str = ""
     fixed_elf_path: str = ""
     unfixed_elf_path: str = ""
+    gitcode_private_token: str = ""
+    github_token: str = ""
+    gitee_access_token: str = ""
 
     @property
     def log_dir(self) -> str:
@@ -57,6 +60,9 @@ def _load_settings() -> Settings:
         unfixed_elf_path=data["UNFIXED_ELF_PATH"],
         openai_api_key=data.get("OPENAI_API_KEY", ""),
         openai_base_url=data.get("OPENAI_BASE_URL", ""),
+        gitcode_private_token=data.get("GITCODE_PRIVATE_TOKEN", ""),
+        github_token=data.get("GITHUB_TOKEN", ""),
+        gitee_access_token=data.get("GITEE_ACCESS_TOKEN", ""),
     )
 
 
