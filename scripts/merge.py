@@ -8,7 +8,7 @@ from typing import Iterable
 
 
 LICENSE_HEADER = """/*
- * Copyright (c) 2026 AutoYara Team
+ * Copyright (c) 2026 Beijing University of Posts and Telecommunications
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -310,3 +310,4 @@ if __name__ == "__main__":
 
 
 __all__ = ["merge_yara", "merge_json"]
+

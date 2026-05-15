@@ -1,6 +1,5 @@
 ﻿from __future__ import annotations
 
-import re
 import sys
 from pathlib import Path
 
@@ -13,16 +12,14 @@ for p in (REPO_ROOT, REPO_ROOT / "src"):
     if s not in sys.path:
         sys.path.insert(0, s)
 
+# 生成2025年11月前五条
 if __name__ == "__main__":
     success = []
     fail = []
     version = []
 
-    for index in range(18, 20):
+    for index in range(1, 6):
         cves_result = run_collector(2025, 11, index, index, do_llm=True)
-
-        print("=" * 20, "kuroniko", "=" * 20)
-        print(cves_result)
 
         versions = []
         for item in cves_result:

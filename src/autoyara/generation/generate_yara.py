@@ -1,4 +1,4 @@
-﻿import os
+import os
 import re
 from datetime import datetime
 
@@ -40,7 +40,6 @@ def _artifact_id(cve_id: str, version_value, override: str = "") -> str:
 
 
 def generate_yara(cveitem: dict, hex_str: str) -> None:
-    # 鑾峰彇AutoYara鏍圭洰褰?
     repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.."))
     template_path = os.path.join(repo_root, "configs", "templates", "yara_rule.j2")
     with open(template_path, encoding="utf-8") as f:
@@ -62,7 +61,7 @@ def generate_yara(cveitem: dict, hex_str: str) -> None:
         hex_str=hex_str,
         log_msg=f"{cve_id} testcase pass",
         copyright_year=datetime.now().year,
-        copyright_holder="AutoYara Team",
+        copyright_holder="Beijing University of Posts and Telecommunications",
     )
 
     out_dir = os.path.join(repo_root, "data", "processed", artifact_id)
@@ -70,3 +69,4 @@ def generate_yara(cveitem: dict, hex_str: str) -> None:
     out_path = os.path.join(out_dir, f"{artifact_id}.yara")
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(output)
+

@@ -8,18 +8,17 @@ from autoyara.llm.sync_client import SyncLLMClient
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 _SYSTEM_PROMPT = """\
-浣犳槸婕忔礊瑙勫垯鐢熸垚涓撳锛屼綘鐨勪换鍔℃槸鏍规嵁CVE婕忔礊淇℃伅鍜孞inja2妯℃澘锛岀敓鎴愮鍚堣姹傜殑JSON鏂囦欢銆傛寜鐓т互涓嬭姹傝繘琛岋細\
-1. 浣犲皢鏀跺埌涓€涓狢VE婕忔礊鐨勫瓧鍏竏ict锛屽寘鍚紡娲炵殑璇︾粏淇℃伅\
-2. 浣犲皢鏀跺埌妯℃澘metadata.json.j2锛屽畾涔変簡鏈€缁圝SON鐨勭粨鏋勫拰瀛楁\
-3. 浣犲皢鏀跺埌绀轰緥example.json锛岀敤浜庡弬鑰冩渶缁圝SON鐨勬牸寮忓拰鍐呭\
-4. 缁嗚妭璇存槑锛歕
-    - 瀵逛簬 patch_info 瀛楁锛屾瘡涓ˉ涓侀」搴斿寘鍚?patch_url锛宲atch_file 鍜?diff_file
-    - 瀵逛簬 affacted_device 瀛楁锛岄渶瑕佷繚鐣欐墍鏈夎澶囩被鍨嬶紝骞跺姣忎釜鍙楀奖鍝嶇殑璁惧濉啓yara瀛楁\
-    - 濡傛灉娌℃湁鍜宎ffacted_device鐩稿叧鐨勪俊鎭紝鍒欎笉闇€瑕佺敓鎴恆ffacted_device瀛楁
+你是漏洞规则生成专家，你的任务是根据CVE漏洞信息和Jinja2模板，生成符合要求的JSON文件。按照以下要求进行：\
+1. 你将收到一个CVE漏洞的字典dict，包含漏洞的详细信息\
+2. 你将收到模板metadata.json.j2，定义了最终JSON的结构和字段\
+3. 你将收到示例example.json，用于参考最终JSON的格式和内容\
+4. 细节说明：\
+    - 对于 patch_info 字段，每个补丁项应包含 patch_url，patch_file 和 diff_file
+    - 对于 affacted_device 字段，需要保留所有设备类型，并对每个受影响的设备填写yara字段\
+    - 如果没有和affacted_device相关的信息，则不需要生成affacted_device字段
 
-浠呰繑鍥炴渶缁堢敓鎴愮殑JSON瀛楃涓诧紝涓嶈娣诲姞娉ㄩ噴鎴杕arkdown鏍煎紡
+仅返回最终生成的JSON字符串，不要添加注释或markdown格式
 """
-
 
 def _version_list(value) -> list[str]:
     if isinstance(value, list):
